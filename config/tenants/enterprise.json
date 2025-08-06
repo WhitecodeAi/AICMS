@@ -1,0 +1,100 @@
+{
+  "id": "enterprise",
+  "name": "Enterprise Corp",
+  "subdomain": "enterprise",
+  "domain": "cms.enterprise.com",
+  "status": "active",
+  "database": {
+    "type": "mysql",
+    "host": "localhost",
+    "port": 3306,
+    "database": "enterprise_cms",
+    "username": "enterprise_user",
+    "password": "enterprise_password_456",
+    "ssl": true,
+    "connectionLimit": 20,
+    "url": "mysql://enterprise_user:enterprise_password_456@localhost:3306/enterprise_cms"
+  },
+  "features": {
+    "advancedEditor": true,
+    "customBranding": true,
+    "apiAccess": true,
+    "fileUpload": true,
+    "analytics": true,
+    "customDomain": true,
+    "sslEnabled": true,
+    "multiLanguage": true,
+    "ecommerce": true,
+    "socialLogin": true
+  },
+  "limits": {
+    "maxUsers": 500,
+    "maxPages": 10000,
+    "maxPosts": 50000,
+    "maxStorage": 50000,
+    "maxApiCalls": 500000,
+    "maxFileSize": 500,
+    "maxMenus": 50,
+    "maxGalleries": 500,
+    "maxSliders": 20
+  },
+  "branding": {
+    "primaryColor": "#ef4444",
+    "secondaryColor": "#f97316",
+    "fontFamily": "Roboto",
+    "brandName": "Enterprise CMS",
+    "tagline": "Enterprise-grade content management",
+    "customCSS": ".enterprise-theme { background: linear-gradient(45deg, #ef4444, #f97316); }"
+  },
+  "seo": {
+    "defaultTitle": "Enterprise CMS",
+    "defaultDescription": "Enterprise content management system",
+    "sitemapEnabled": true,
+    "googleAnalyticsId": "GA-ENTERPRISE-123"
+  },
+  "security": {
+    "jwtSecret": "enterprise_jwt_secret_key_for_development_only",
+    "encryptionKey": "enterprise_encryption_key_for_development",
+    "sessionSecret": "enterprise_session_secret_for_development",
+    "apiKeyEnabled": true,
+    "apiKey": "enterprise_api_key_456",
+    "corsOrigins": ["https://enterprise.com", "https://app.enterprise.com"],
+    "rateLimitEnabled": true,
+    "rateLimitRequests": 1000
+  },
+  "smtp": {
+    "enabled": true,
+    "host": "smtp.enterprise.com",
+    "port": 587,
+    "username": "noreply@enterprise.com",
+    "password": "smtp_password",
+    "fromEmail": "noreply@enterprise.com",
+    "fromName": "Enterprise CMS"
+  },
+  "storage": {
+    "type": "s3",
+    "bucket": "enterprise-cms-files",
+    "region": "us-east-1",
+    "accessKey": "AWS_ACCESS_KEY",
+    "secretKey": "AWS_SECRET_KEY"
+  },
+  "environment": {
+    "NODE_ENV": "production",
+    "TENANT_MODE": "enterprise",
+    "ENTERPRISE_FEATURES": "enabled"
+  },
+  "customSettings": {
+    "welcomeMessage": "Welcome to Enterprise CMS",
+    "supportEmail": "support@enterprise.com",
+    "maintenanceMode": false,
+    "backupEnabled": true,
+    "auditLogging": true
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "adminUser": {
+    "email": "admin@enterprise.com",
+    "firstName": "Enterprise",
+    "lastName": "Admin"
+  }
+}
