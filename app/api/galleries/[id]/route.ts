@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { galleriesStore, updateGallery, deleteGallery } from '@/lib/stores/content-store'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 
 // GET /api/galleries/[id] - Get single gallery
 export async function GET(
@@ -7,7 +8,20 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const gallery = galleriesStore.find(gallery => gallery.id === params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
+    const gallery = await prisma.gallery.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
 
     if (!gallery) {
       return NextResponse.json(
@@ -34,16 +48,56 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const body = await request.json()
-    
-    const updatedGallery = updateGallery(params.id, body)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
 
-    if (!updatedGallery) {
+    const body = await request.json()
+
+    // Check if gallery exists for this tenant
+    const existingGallery = await prisma.gallery.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
+
+    if (!existingGallery) {
       return NextResponse.json(
         { error: 'Gallery not found' },
         { status: 404 }
       )
     }
+
+    // If shortcode is being updated, check for uniqueness
+    if (body.shortcode && body.shortcode !== existingGallery.shortcode) {
+      const duplicateShortcode = await prisma.gallery.findFirst({
+        where: {
+          tenantId: tenant.id,
+          shortcode: body.shortcode,
+          id: { not: params.id }
+        }
+      })
+
+      if (duplicateShortcode) {
+        return NextResponse.json(
+          { error: 'Shortcode already exists' },
+          { status: 400 }
+        )
+      }
+    }
+
+    const updatedGallery = await prisma.gallery.update({
+      where: { id: params.id },
+      data: {
+        ...body,
+        id: undefined // Don't allow ID to be updated
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -64,14 +118,32 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const deleted = deleteGallery(params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
 
-    if (!deleted) {
+    // Check if gallery exists for this tenant
+    const existingGallery = await prisma.gallery.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
+
+    if (!existingGallery) {
       return NextResponse.json(
         { error: 'Gallery not found' },
         { status: 404 }
       )
     }
+
+    await prisma.gallery.delete({
+      where: { id: params.id }
+    })
 
     return NextResponse.json({
       success: true,
