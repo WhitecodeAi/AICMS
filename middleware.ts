@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
-import { createEdgeTenantMiddleware } from './lib/middleware/tenant-edge';
+import { createDomainTenantMiddleware } from './lib/middleware/domain-tenant-middleware';
 
-// Configure Edge Runtime compatible tenant middleware
-const tenantMiddleware = createEdgeTenantMiddleware({
+// Configure domain-based tenant middleware
+const tenantMiddleware = createDomainTenantMiddleware({
   skipPaths: [
     '/api/health',
     '/api/system',
@@ -14,8 +14,9 @@ const tenantMiddleware = createEdgeTenantMiddleware({
     '/.well-known'
   ],
   requireTenant: false, // Don't require tenant for now to avoid blocking
-  fallbackTenant: 'demo',
-  enableDevMode: process.env.NODE_ENV === 'development'
+  enableDevMode: process.env.NODE_ENV === 'development',
+  fallbackDomain: 'demo.whitecodetech.com',
+  enableLogging: process.env.NODE_ENV === 'development'
 });
 
 export function middleware(request: NextRequest) {
