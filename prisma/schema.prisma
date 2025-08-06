@@ -32,6 +32,7 @@ model Tenant {
   galleries   Gallery[]
   analytics   Analytics[]
   newsItems   NewsItem[]
+  sliders     Slider[]
 
   @@map("tenants")
 }
@@ -223,4 +224,22 @@ model NewsItem {
   @@index([tenantId, date])
   @@index([featured])
   @@map("news_items")
+}
+
+model Slider {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  location    String   @default("homepage")
+  settings    Json?
+  slides      Json     // Array of slide objects
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("sliders")
 }

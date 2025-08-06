@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 import type { Menu } from '@/lib/stores/menu-store'
 
-// Simple in-memory store for development (in production, use a database)
-let menusStore: Menu[] = [
+// Sample data kept for reference
+const sampleMenuData: any[] = [
   {
     id: '1',
     name: 'Main Navigation',
@@ -44,17 +46,26 @@ let menusStore: Menu[] = [
   }
 ]
 
-const getMenusStore = () => menusStore
-const setMenusStore = (menus: Menu[]) => { menusStore = menus }
-
 // GET /api/menus/[id] - Get single menu
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const menus = getMenusStore()
-    const menu = menus.find((menu: Menu) => menu.id === params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
+    const menu = await prisma.menu.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
 
     if (!menu) {
       return NextResponse.json(
@@ -79,27 +90,38 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const body = await request.json()
-    const menus = getMenusStore()
-    
-    const menuIndex = menus.findIndex((menu: Menu) => menu.id === params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
 
-    if (menuIndex < 0) {
+    const body = await request.json()
+
+    // Check if menu exists for this tenant
+    const existingMenu = await prisma.menu.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
+
+    if (!existingMenu) {
       return NextResponse.json(
         { error: 'Menu not found' },
         { status: 404 }
       )
     }
 
-    const updatedMenu = {
-      ...menus[menuIndex],
-      ...body,
-      id: params.id, // Ensure ID doesn't change
-      updatedAt: new Date()
-    }
-
-    menus[menuIndex] = updatedMenu
-    setMenusStore(menus)
+    const updatedMenu = await prisma.menu.update({
+      where: { id: params.id },
+      data: {
+        ...body,
+        id: undefined // Don't allow ID to be updated
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -120,18 +142,32 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const menus = getMenusStore()
-    const menuIndex = menus.findIndex((menu: Menu) => menu.id === params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
 
-    if (menuIndex < 0) {
+    // Check if menu exists for this tenant
+    const existingMenu = await prisma.menu.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
+
+    if (!existingMenu) {
       return NextResponse.json(
         { error: 'Menu not found' },
         { status: 404 }
       )
     }
 
-    menus.splice(menuIndex, 1)
-    setMenusStore(menus)
+    await prisma.menu.delete({
+      where: { id: params.id }
+    })
 
     return NextResponse.json({
       success: true,

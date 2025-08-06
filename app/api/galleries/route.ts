@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { galleriesStore, addGallery } from '@/lib/stores/content-store'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 
 // GET /api/galleries - Fetch galleries with filters
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
     const category = searchParams.get('category')
@@ -13,54 +22,67 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // Use shared store
-    let filteredGalleries = [...galleriesStore]
+    // Build where clause for filters
+    const where: any = {
+      tenantId: tenant.id
+    }
 
-    // Apply filters
     if (search) {
       const searchTerm = search.toLowerCase()
-      filteredGalleries = filteredGalleries.filter(gallery =>
-        gallery.title.toLowerCase().includes(searchTerm) ||
-        gallery.description?.toLowerCase().includes(searchTerm) ||
-        gallery.shortcode.toLowerCase().includes(searchTerm)
-      )
+      where.OR = [
+        { title: { contains: searchTerm, mode: 'insensitive' } },
+        { description: { contains: searchTerm, mode: 'insensitive' } },
+        { shortcode: { contains: searchTerm, mode: 'insensitive' } }
+      ]
     }
 
     if (category) {
-      filteredGalleries = filteredGalleries.filter(gallery => 
-        gallery.category?.toLowerCase().includes(category.toLowerCase())
-      )
+      where.category = { contains: category, mode: 'insensitive' }
     }
 
     if (department) {
-      filteredGalleries = filteredGalleries.filter(gallery => 
-        gallery.department?.toLowerCase().includes(department.toLowerCase())
-      )
+      where.department = { contains: department, mode: 'insensitive' }
     }
 
     if (academicYear) {
-      filteredGalleries = filteredGalleries.filter(gallery => gallery.academicYear === academicYear)
+      where.academicYear = academicYear
     }
 
     if (isActive !== null && isActive !== undefined) {
-      filteredGalleries = filteredGalleries.filter(gallery => gallery.isActive === (isActive === 'true'))
+      where.isActive = isActive === 'true'
     }
 
-    // Sort by title
-    filteredGalleries.sort((a, b) => a.title.localeCompare(b.title))
+    // Get galleries from database
+    const [galleries, totalCount] = await Promise.all([
+      prisma.gallery.findMany({
+        where,
+        orderBy: { title: 'asc' },
+        skip: offset,
+        take: limit
+      }),
+      prisma.gallery.count({ where })
+    ])
 
-    // Apply pagination
-    const start = offset
-    const end = start + limit
-    const paginatedGalleries = filteredGalleries.slice(start, end)
+    // Get unique categories and departments for the tenant
+    const [categoriesResult, departmentsResult] = await Promise.all([
+      prisma.gallery.findMany({
+        where: { tenantId: tenant.id },
+        select: { category: true },
+        distinct: ['category']
+      }),
+      prisma.gallery.findMany({
+        where: { tenantId: tenant.id },
+        select: { department: true },
+        distinct: ['department']
+      })
+    ])
 
-    // Get unique categories and departments
-    const categories = Array.from(new Set(galleriesStore.map(gallery => gallery.category))).filter(Boolean)
-    const departments = Array.from(new Set(galleriesStore.map(gallery => gallery.department))).filter(Boolean)
+    const categories = categoriesResult.map(g => g.category).filter(Boolean)
+    const departments = departmentsResult.map(g => g.department).filter(Boolean)
 
     return NextResponse.json({
-      galleries: paginatedGalleries,
-      totalCount: filteredGalleries.length,
+      galleries,
+      totalCount,
       categories,
       departments
     })
@@ -76,8 +98,16 @@ export async function GET(request: NextRequest) {
 // POST /api/galleries - Create new gallery
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
-    
+
     const {
       title,
       description,
@@ -100,24 +130,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const gallery = {
-      id: Date.now().toString(),
-      title,
-      description: description || null,
-      shortcode,
-      category: category || null,
-      department: department || null,
-      academicYear: academicYear || null,
-      layout: layout || 'grid',
-      columns: columns || 3,
-      showCaptions: showCaptions || true,
-      lightbox: lightbox || true,
-      isActive: isActive ?? true,
-      images: images || []
+    // Check if shortcode already exists for this tenant
+    const existingGallery = await prisma.gallery.findFirst({
+      where: {
+        tenantId: tenant.id,
+        shortcode
+      }
+    })
+
+    if (existingGallery) {
+      return NextResponse.json(
+        { error: 'Shortcode already exists' },
+        { status: 400 }
+      )
     }
 
-    // Add to shared store
-    addGallery(gallery)
+    // Create gallery in database
+    const gallery = await prisma.gallery.create({
+      data: {
+        title,
+        description: description || null,
+        shortcode,
+        category: category || null,
+        department: department || null,
+        academicYear: academicYear || null,
+        images: images || [],
+        isActive: isActive ?? true,
+        tenantId: tenant.id
+      }
+    })
 
     return NextResponse.json({
       success: true,

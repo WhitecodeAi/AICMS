@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 
-// Sample data for development
+// Sample data for reference
 const sampleNewsData = [
   {
     id: '1',
@@ -26,7 +28,20 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const newsItem = sampleNewsData.find(item => item.id === params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
+    const newsItem = await prisma.newsItem.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
 
     if (!newsItem) {
       return NextResponse.json(
@@ -41,7 +56,7 @@ export async function GET(
         title: newsItem.title,
         content: newsItem.content,
         excerpt: newsItem.excerpt,
-        date: newsItem.date,
+        date: newsItem.date.toISOString().split('T')[0],
         category: newsItem.category,
         priority: newsItem.priority,
         image: newsItem.imageUrl,
@@ -50,7 +65,8 @@ export async function GET(
         status: newsItem.status,
         featured: newsItem.featured,
         tags: newsItem.tags ? JSON.parse(newsItem.tags) : [],
-        publishDate: newsItem.publishDate
+        publishDate: newsItem.publishDate?.toISOString().split('T')[0],
+        expiryDate: newsItem.expiryDate?.toISOString().split('T')[0]
       }
     })
   } catch (error) {
@@ -68,8 +84,16 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
-    
+
     const {
       title,
       content,
@@ -86,27 +110,63 @@ export async function PUT(
       expiryDate
     } = body
 
-    const newsIndex = sampleNewsData.findIndex(item => item.id === params.id)
+    // Check if news item exists for this tenant
+    const existingNews = await prisma.newsItem.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
 
-    if (newsIndex < 0) {
+    if (!existingNews) {
       return NextResponse.json(
         { error: 'News item not found' },
         { status: 404 }
       )
     }
 
-    const existingNews = sampleNewsData[newsIndex]
-    const updatedNews = {
-      ...existingNews,
-      ...body,
-      id: params.id // Ensure ID doesn't change
-    }
+    const updatedNews = await prisma.newsItem.update({
+      where: { id: params.id },
+      data: {
+        title,
+        content,
+        excerpt,
+        category,
+        priority,
+        imageUrl: image,
+        linkUrl: link,
+        author,
+        status,
+        featured,
+        tags: tags ? JSON.stringify(tags) : null,
+        publishDate: publishDate ? new Date(publishDate) : null,
+        expiryDate: expiryDate ? new Date(expiryDate) : null,
+        date: publishDate ? new Date(publishDate) : existingNews.date
+      }
+    })
 
-    sampleNewsData[newsIndex] = updatedNews
+    // Format response to match frontend expectations
+    const formattedNews = {
+      id: updatedNews.id,
+      title: updatedNews.title,
+      content: updatedNews.content,
+      excerpt: updatedNews.excerpt,
+      date: updatedNews.date.toISOString().split('T')[0],
+      category: updatedNews.category,
+      priority: updatedNews.priority,
+      image: updatedNews.imageUrl,
+      link: updatedNews.linkUrl,
+      author: updatedNews.author,
+      status: updatedNews.status,
+      featured: updatedNews.featured,
+      tags: updatedNews.tags ? JSON.parse(updatedNews.tags) : [],
+      publishDate: updatedNews.publishDate?.toISOString().split('T')[0],
+      expiryDate: updatedNews.expiryDate?.toISOString().split('T')[0]
+    }
 
     return NextResponse.json({
       success: true,
-      news: updatedNews
+      news: formattedNews
     })
   } catch (error) {
     console.error('Error updating news item:', error)
@@ -123,16 +183,32 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const newsIndex = sampleNewsData.findIndex(item => item.id === params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
 
-    if (newsIndex < 0) {
+    // Check if news item exists for this tenant
+    const existingNews = await prisma.newsItem.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
+
+    if (!existingNews) {
       return NextResponse.json(
         { error: 'News item not found' },
         { status: 404 }
       )
     }
 
-    sampleNewsData.splice(newsIndex, 1)
+    await prisma.newsItem.delete({
+      where: { id: params.id }
+    })
 
     return NextResponse.json({
       success: true,
