@@ -1,0 +1,84 @@
+{
+  "id": "demo",
+  "name": "Demo Company",
+  "subdomain": "demo",
+  "status": "active",
+  "database": {
+    "type": "mysql",
+    "host": "localhost",
+    "port": 3306,
+    "database": "demo_cms",
+    "username": "demo_user",
+    "password": "demo_password_123",
+    "ssl": false,
+    "connectionLimit": 10,
+    "url": "mysql://demo_user:demo_password_123@localhost:3306/demo_cms"
+  },
+  "features": {
+    "advancedEditor": true,
+    "customBranding": true,
+    "apiAccess": true,
+    "fileUpload": true,
+    "analytics": true,
+    "customDomain": false,
+    "sslEnabled": false,
+    "multiLanguage": false,
+    "ecommerce": false,
+    "socialLogin": false
+  },
+  "limits": {
+    "maxUsers": 25,
+    "maxPages": 500,
+    "maxPosts": 1000,
+    "maxStorage": 2000,
+    "maxApiCalls": 25000,
+    "maxFileSize": 50,
+    "maxMenus": 5,
+    "maxGalleries": 20,
+    "maxSliders": 5
+  },
+  "branding": {
+    "primaryColor": "#3b82f6",
+    "secondaryColor": "#64748b",
+    "fontFamily": "Inter",
+    "brandName": "Demo CMS",
+    "tagline": "Your demo website builder"
+  },
+  "seo": {
+    "defaultTitle": "Demo CMS",
+    "defaultDescription": "A demo content management system",
+    "sitemapEnabled": true
+  },
+  "security": {
+    "jwtSecret": "demo_jwt_secret_key_for_development_only",
+    "encryptionKey": "demo_encryption_key_for_development",
+    "sessionSecret": "demo_session_secret_for_development",
+    "apiKeyEnabled": true,
+    "apiKey": "demo_api_key_123",
+    "corsOrigins": [],
+    "rateLimitEnabled": true,
+    "rateLimitRequests": 100
+  },
+  "smtp": {
+    "enabled": false
+  },
+  "storage": {
+    "type": "local",
+    "basePath": "/uploads/demo"
+  },
+  "environment": {
+    "NODE_ENV": "development",
+    "TENANT_MODE": "demo"
+  },
+  "customSettings": {
+    "welcomeMessage": "Welcome to the demo tenant!",
+    "supportEmail": "demo@example.com"
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "adminUser": {
+    "email": "admin@demo.com",
+    "firstName": "Demo",
+    "lastName": "Admin"
+  }
+}
