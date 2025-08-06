@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { slidersStore, addSlider } from '@/lib/stores/content-store'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 
 // GET /api/sliders - Fetch sliders with filters
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
     const location = searchParams.get('location')
@@ -11,42 +20,50 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // Use shared store
-    let filteredSliders = [...slidersStore]
+    // Build where clause for filters
+    const where: any = {
+      tenantId: tenant.id
+    }
 
-    // Apply filters
     if (search) {
       const searchTerm = search.toLowerCase()
-      filteredSliders = filteredSliders.filter(slider =>
-        slider.name.toLowerCase().includes(searchTerm) ||
-        slider.description?.toLowerCase().includes(searchTerm)
-      )
+      where.OR = [
+        { name: { contains: searchTerm, mode: 'insensitive' } },
+        { description: { contains: searchTerm, mode: 'insensitive' } }
+      ]
     }
 
     if (location) {
-      filteredSliders = filteredSliders.filter(slider => 
-        slider.location?.toLowerCase().includes(location.toLowerCase())
-      )
+      where.location = { contains: location, mode: 'insensitive' }
     }
 
     if (isActive !== null && isActive !== undefined) {
-      filteredSliders = filteredSliders.filter(slider => slider.isActive === (isActive === 'true'))
+      where.isActive = isActive === 'true'
     }
 
-    // Sort by name
-    filteredSliders.sort((a, b) => a.name.localeCompare(b.name))
+    // Get sliders from database
+    const [sliders, totalCount] = await Promise.all([
+      prisma.slider.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: offset,
+        take: limit
+      }),
+      prisma.slider.count({ where })
+    ])
 
-    // Apply pagination
-    const start = offset
-    const end = start + limit
-    const paginatedSliders = filteredSliders.slice(start, end)
+    // Get unique locations for the tenant
+    const locationsResult = await prisma.slider.findMany({
+      where: { tenantId: tenant.id },
+      select: { location: true },
+      distinct: ['location']
+    })
 
-    // Get unique locations
-    const locations = Array.from(new Set(slidersStore.map(slider => slider.location))).filter(Boolean)
+    const locations = locationsResult.map(s => s.location).filter(Boolean)
 
     return NextResponse.json({
-      sliders: paginatedSliders,
-      totalCount: filteredSliders.length,
+      sliders,
+      totalCount,
       locations
     })
   } catch (error) {
@@ -61,8 +78,16 @@ export async function GET(request: NextRequest) {
 // POST /api/sliders - Create new slider
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
-    
+
     const {
       name,
       description,
@@ -79,27 +104,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const slider = {
-      id: Date.now().toString(),
-      name,
-      description: description || null,
-      location: location || 'custom',
-      isActive: isActive ?? true,
-      settings: settings || {
-        autoPlay: true,
-        autoPlaySpeed: 5,
-        showDots: true,
-        showArrows: true,
-        infinite: true,
-        pauseOnHover: true,
-        transition: 'slide',
-        height: '400px'
-      },
-      slides: slides || []
+    const defaultSettings = {
+      autoPlay: true,
+      autoPlaySpeed: 5,
+      showDots: true,
+      showArrows: true,
+      infinite: true,
+      pauseOnHover: true,
+      transition: 'slide',
+      height: '400px'
     }
 
-    // Add to shared store
-    addSlider(slider)
+    // Create slider in database
+    const slider = await prisma.slider.create({
+      data: {
+        name,
+        description: description || null,
+        location: location || 'custom',
+        isActive: isActive ?? true,
+        settings: settings || defaultSettings,
+        slides: slides || [],
+        tenantId: tenant.id
+      }
+    })
 
     return NextResponse.json({
       success: true,
