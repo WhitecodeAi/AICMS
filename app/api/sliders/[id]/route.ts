@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { slidersStore, updateSlider, deleteSlider } from '@/lib/stores/content-store'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 
 // GET /api/sliders/[id] - Get single slider
 export async function GET(
@@ -7,7 +8,20 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const slider = slidersStore.find(slider => slider.id === params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
+    const slider = await prisma.slider.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
 
     if (!slider) {
       return NextResponse.json(
@@ -34,16 +48,38 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const body = await request.json()
-    
-    const updatedSlider = updateSlider(params.id, body)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
 
-    if (!updatedSlider) {
+    const body = await request.json()
+
+    // Check if slider exists for this tenant
+    const existingSlider = await prisma.slider.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
+
+    if (!existingSlider) {
       return NextResponse.json(
         { error: 'Slider not found' },
         { status: 404 }
       )
     }
+
+    const updatedSlider = await prisma.slider.update({
+      where: { id: params.id },
+      data: {
+        ...body,
+        id: undefined // Don't allow ID to be updated
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -64,14 +100,32 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const deleted = deleteSlider(params.id)
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
 
-    if (!deleted) {
+    // Check if slider exists for this tenant
+    const existingSlider = await prisma.slider.findFirst({
+      where: {
+        id: params.id,
+        tenantId: tenant.id
+      }
+    })
+
+    if (!existingSlider) {
       return NextResponse.json(
         { error: 'Slider not found' },
         { status: 404 }
       )
     }
+
+    await prisma.slider.delete({
+      where: { id: params.id }
+    })
 
     return NextResponse.json({
       success: true,
