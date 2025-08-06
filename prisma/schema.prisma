@@ -32,6 +32,7 @@ model Tenant {
   galleries   Gallery[]
   analytics   Analytics[]
   newsItems   NewsItem[]
+  sliders     Slider[]
 
   @@map("tenants")
 }
