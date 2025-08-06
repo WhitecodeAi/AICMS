@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 
-// Sample data for when database is not available
+// Sample data for reference
 const sampleNewsData = [
   {
     id: '1',
@@ -104,6 +106,14 @@ const sampleNewsData = [
 // GET /api/news - Fetch news with filters
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
     const category = searchParams.get('category')
@@ -112,48 +122,74 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // For now, use sample data until database is set up
-    let filteredNews = [...sampleNewsData]
+    // Build where clause for filters
+    const where: any = {
+      tenantId: tenant.id
+    }
 
-    // Apply filters
     if (search) {
       const searchTerm = search.toLowerCase()
-      filteredNews = filteredNews.filter(item =>
-        item.title.toLowerCase().includes(searchTerm) ||
-        item.content.toLowerCase().includes(searchTerm) ||
-        item.excerpt?.toLowerCase().includes(searchTerm) ||
-        item.tags?.some(tag => tag.toLowerCase().includes(searchTerm))
-      )
+      where.OR = [
+        { title: { contains: searchTerm, mode: 'insensitive' } },
+        { content: { contains: searchTerm, mode: 'insensitive' } },
+        { excerpt: { contains: searchTerm, mode: 'insensitive' } }
+      ]
     }
 
     if (category) {
-      filteredNews = filteredNews.filter(item =>
-        item.category.toLowerCase().includes(category.toLowerCase())
-      )
+      where.category = { contains: category, mode: 'insensitive' }
     }
 
     if (status) {
-      filteredNews = filteredNews.filter(item => item.status === status)
+      where.status = status
     }
 
     if (featured !== null && featured !== undefined) {
-      filteredNews = filteredNews.filter(item => item.featured === (featured === 'true'))
+      where.featured = featured === 'true'
     }
 
-    // Sort by date (newest first)
-    filteredNews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    // Get news from database
+    const [newsItems, totalCount] = await Promise.all([
+      prisma.newsItem.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        skip: offset,
+        take: limit
+      }),
+      prisma.newsItem.count({ where })
+    ])
 
-    // Apply pagination
-    const start = offset
-    const end = start + limit
-    const paginatedNews = filteredNews.slice(start, end)
+    // Get unique categories for the tenant
+    const categoriesResult = await prisma.newsItem.findMany({
+      where: { tenantId: tenant.id },
+      select: { category: true },
+      distinct: ['category']
+    })
 
-    // Get unique categories
-    const categories = Array.from(new Set(sampleNewsData.map(item => item.category))).filter(Boolean)
+    const categories = categoriesResult.map(item => item.category).filter(Boolean)
+
+    // Format the response to match frontend expectations
+    const formattedNews = newsItems.map(item => ({
+      id: item.id,
+      title: item.title,
+      content: item.content,
+      excerpt: item.excerpt,
+      date: item.date.toISOString().split('T')[0],
+      category: item.category,
+      priority: item.priority,
+      image: item.imageUrl,
+      link: item.linkUrl,
+      author: item.author,
+      status: item.status,
+      featured: item.featured,
+      tags: item.tags ? JSON.parse(item.tags) : [],
+      publishDate: item.publishDate?.toISOString().split('T')[0],
+      expiryDate: item.expiryDate?.toISOString().split('T')[0]
+    }))
 
     return NextResponse.json({
-      news: paginatedNews,
-      totalCount: filteredNews.length,
+      news: formattedNews,
+      totalCount,
       categories
     })
   } catch (error) {
@@ -168,8 +204,16 @@ export async function GET(request: NextRequest) {
 // POST /api/news - Create new news item
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
-    
+
     const {
       title,
       content,
@@ -193,30 +237,49 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const newsItem = {
-      id: Date.now().toString(),
-      title,
-      content,
-      excerpt: excerpt || null,
-      date: publishDate || new Date().toISOString().split('T')[0],
-      category,
-      priority: priority || 'medium',
-      image: image || null,
-      link: link || null,
-      author: author || null,
-      status: status || 'draft',
-      featured: featured || false,
-      tags: tags || [],
-      publishDate: publishDate || null,
-      expiryDate: expiryDate || null
-    }
+    // Create news item in database
+    const newsItem = await prisma.newsItem.create({
+      data: {
+        title,
+        content,
+        excerpt: excerpt || null,
+        category,
+        priority: priority || 'medium',
+        imageUrl: image || null,
+        linkUrl: link || null,
+        author: author || null,
+        status: status || 'draft',
+        featured: featured || false,
+        tags: tags ? JSON.stringify(tags) : null,
+        publishDate: publishDate ? new Date(publishDate) : null,
+        expiryDate: expiryDate ? new Date(expiryDate) : null,
+        date: publishDate ? new Date(publishDate) : new Date(),
+        tenantId: tenant.id
+      }
+    })
 
-    // In a real app, this would be saved to database
-    sampleNewsData.unshift(newsItem)
+    // Format response to match frontend expectations
+    const formattedNews = {
+      id: newsItem.id,
+      title: newsItem.title,
+      content: newsItem.content,
+      excerpt: newsItem.excerpt,
+      date: newsItem.date.toISOString().split('T')[0],
+      category: newsItem.category,
+      priority: newsItem.priority,
+      image: newsItem.imageUrl,
+      link: newsItem.linkUrl,
+      author: newsItem.author,
+      status: newsItem.status,
+      featured: newsItem.featured,
+      tags: newsItem.tags ? JSON.parse(newsItem.tags) : [],
+      publishDate: newsItem.publishDate?.toISOString().split('T')[0],
+      expiryDate: newsItem.expiryDate?.toISOString().split('T')[0]
+    }
 
     return NextResponse.json({
       success: true,
-      news: newsItem
+      news: formattedNews
     })
   } catch (error) {
     console.error('Error creating news:', error)
