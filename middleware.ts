@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
-import { createTenantMiddleware } from './lib/middleware/tenant-new';
+import { createEdgeTenantMiddleware } from './lib/middleware/tenant-edge';
 
-// Configure tenant middleware with file-based system
-const tenantMiddleware = createTenantMiddleware({
+// Configure Edge Runtime compatible tenant middleware
+const tenantMiddleware = createEdgeTenantMiddleware({
   skipPaths: [
     '/api/health',
     '/api/system',
@@ -11,16 +11,14 @@ const tenantMiddleware = createTenantMiddleware({
     '/favicon.ico',
     '/robots.txt',
     '/sitemap.xml',
-    '/.well-known',
-    '/tenant-not-found',
-    '/tenant-unavailable'
+    '/.well-known'
   ],
-  requireTenant: true,
-  fallbackTenant: 'demo', // Fallback to demo tenant in development
+  requireTenant: false, // Don't require tenant for now to avoid blocking
+  fallbackTenant: 'demo',
   enableDevMode: process.env.NODE_ENV === 'development'
 });
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   return tenantMiddleware(request);
 }
 
