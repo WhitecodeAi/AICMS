@@ -1,5 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Multi-tenant CMS Schema - File-based tenant management
+// Client/tenant information is managed through configuration files, not database
+// Each tenant can have their own database or share the same database
 
 generator client {
   provider = "prisma-client-js"
@@ -8,33 +9,6 @@ generator client {
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
-}
-
-model Tenant {
-  id          String   @id @default(uuid())
-  name        String
-  subdomain   String   @unique
-  domain      String?  @unique
-  logo        String?
-  favicon     String?
-  primaryColor String  @default("#3b82f6")
-  settings    Json?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  users       User[]
-  pages       Page[]
-  posts       Post[]
-  files       File[]
-  menus       Menu[]
-  galleries   Gallery[]
-  analytics   Analytics[]
-  newsItems   NewsItem[]
-  sliders     Slider[]
-
-  @@map("tenants")
 }
 
 model User {
@@ -50,15 +24,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Multi-tenant
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // Relations
+  // Relations (no tenant relations needed)
   createdPages Page[] @relation("PageCreator")
   updatedPages Page[] @relation("PageUpdater")
   createdPosts Post[] @relation("PostCreator")
   updatedPosts Post[] @relation("PostUpdater")
+  uploadedFiles File[] @relation("FileUploader")
 
   @@map("users")
 }
@@ -73,7 +44,7 @@ enum Role {
 model Page {
   id          String    @id @default(uuid())
   title       String
-  slug        String
+  slug        String    @unique
   content     Json?     // Page builder content
   metaTitle   String?
   metaDescription String? @db.Text
@@ -83,24 +54,19 @@ model Page {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  // Multi-tenant
-  tenantId    String
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   // Relations
   createdById String
   createdBy   User      @relation("PageCreator", fields: [createdById], references: [id])
   updatedById String?
   updatedBy   User?     @relation("PageUpdater", fields: [updatedById], references: [id])
 
-  @@unique([tenantId, slug])
   @@map("pages")
 }
 
 model Post {
   id          String    @id @default(uuid())
   title       String
-  slug        String
+  slug        String    @unique
   excerpt     String?   @db.Text
   content     Json?     // Rich text content
   featuredImage String?
@@ -111,17 +77,12 @@ model Post {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  // Multi-tenant
-  tenantId    String
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   // Relations
   createdById String
   createdBy   User      @relation("PostCreator", fields: [createdById], references: [id])
   updatedById String?
   updatedBy   User?     @relation("PostUpdater", fields: [updatedById], references: [id])
 
-  @@unique([tenantId, slug])
   @@map("posts")
 }
 
@@ -138,9 +99,9 @@ model File {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Multi-tenant
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Relations
+  uploadedById String
+  uploadedBy   User   @relation("FileUploader", fields: [uploadedById], references: [id])
 
   @@map("files")
 }
@@ -153,10 +114,6 @@ model Menu {
   isActive  Boolean    @default(true)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
-
-  // Multi-tenant
-  tenantId  String
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("menus")
 }
@@ -173,10 +130,6 @@ model Gallery {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Multi-tenant
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   @@map("galleries")
 }
 
@@ -188,10 +141,7 @@ model Analytics {
   path        String?
   userAgent   String?
   ipAddress   String?
-
-  // Multi-tenant
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metadata    Json?    // Additional analytics data
 
   @@map("analytics")
 }
@@ -215,13 +165,9 @@ model NewsItem {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  // Multi-tenant
-  tenantId    String
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, category])
-  @@index([tenantId, status])
-  @@index([tenantId, date])
+  @@index([category])
+  @@index([status])
+  @@index([date])
   @@index([featured])
   @@map("news_items")
 }
@@ -237,9 +183,25 @@ model Slider {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Multi-tenant
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   @@map("sliders")
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  type      SettingType @default(STRING)
+  description String?
+  isPublic  Boolean  @default(false) // Can be accessed on frontend
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
 }
