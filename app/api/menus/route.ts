@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getCurrentTenant } from '@/lib/middleware/tenant'
 import type { Menu, MenuItem } from '@/lib/stores/menu-store'
 
-// Shared menu store for development (in production, use a database)
-let menusStore: Menu[] = [
+// Sample data for seeding if needed
+const sampleMenuData: any[] = [
   {
     id: '1',
     name: 'Main Navigation',
@@ -74,21 +76,35 @@ let menusStore: Menu[] = [
 // GET /api/menus - Fetch all menus
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const location = searchParams.get('location')
-
-    let filteredMenus = [...menusStore]
-
-    // Filter by location if provided
-    if (location) {
-      filteredMenus = filteredMenus.filter(menu => 
-        menu.location === location && menu.isActive
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
       )
     }
 
+    const { searchParams } = new URL(request.url)
+    const location = searchParams.get('location')
+
+    // Build where clause
+    const where: any = {
+      tenantId: tenant.id
+    }
+
+    if (location) {
+      where.location = location
+      where.isActive = true
+    }
+
+    const menus = await prisma.menu.findMany({
+      where,
+      orderBy: { createdAt: 'desc' }
+    })
+
     return NextResponse.json({
-      menus: filteredMenus,
-      totalCount: filteredMenus.length
+      menus,
+      totalCount: menus.length
     })
   } catch (error) {
     console.error('Error fetching menus:', error)
@@ -102,8 +118,16 @@ export async function GET(request: NextRequest) {
 // POST /api/menus - Create new menu
 export async function POST(request: NextRequest) {
   try {
+    const tenant = await getCurrentTenant(request)
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await request.json()
-    
+
     const {
       name,
       location,
@@ -117,25 +141,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const menu: Menu = {
-      id: Date.now().toString(),
-      name,
-      location,
-      items,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }
-
-    menusStore.unshift(menu)
-
-    // Also save to API for persistence
-    try {
-      // In a real app, this would save to database
-      console.log('Menu created:', menu)
-    } catch (error) {
-      console.error('Failed to persist menu:', error)
-    }
+    const menu = await prisma.menu.create({
+      data: {
+        name,
+        location,
+        items,
+        isActive: true,
+        tenantId: tenant.id
+      }
+    })
 
     return NextResponse.json({
       success: true,
