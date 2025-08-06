@@ -1,0 +1,207 @@
+// Multi-tenant CMS Schema - File-based tenant management
+// Client/tenant information is managed through configuration files, not database
+// Each tenant can have their own database or share the same database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  avatar    String?
+  role      Role     @default(EDITOR)
+  isActive  Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (no tenant relations needed)
+  createdPages Page[] @relation("PageCreator")
+  updatedPages Page[] @relation("PageUpdater")
+  createdPosts Post[] @relation("PostCreator")
+  updatedPosts Post[] @relation("PostUpdater")
+  uploadedFiles File[] @relation("FileUploader")
+
+  @@map("users")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model Page {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String    @unique
+  content     Json?     // Page builder content
+  metaTitle   String?
+  metaDescription String? @db.Text
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  template    String?   @default("default")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  createdById String
+  createdBy   User      @relation("PageCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?     @relation("PageUpdater", fields: [updatedById], references: [id])
+
+  @@map("pages")
+}
+
+model Post {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String    @unique
+  excerpt     String?   @db.Text
+  content     Json?     // Rich text content
+  featuredImage String?
+  metaTitle   String?
+  metaDescription String? @db.Text
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  createdById String
+  createdBy   User      @relation("PostCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?     @relation("PostUpdater", fields: [updatedById], references: [id])
+
+  @@map("posts")
+}
+
+model File {
+  id          String   @id @default(uuid())
+  name        String
+  originalName String
+  mimeType    String
+  size        Int
+  path        String
+  url         String
+  folder      String?
+  alt         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  uploadedById String
+  uploadedBy   User   @relation("FileUploader", fields: [uploadedById], references: [id])
+
+  @@map("files")
+}
+
+model Menu {
+  id        String     @id @default(uuid())
+  name      String
+  location  String     // header, footer, sidebar
+  items     Json       // Menu items as JSON
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("menus")
+}
+
+model Gallery {
+  id          String   @id @default(uuid())
+  title       String
+  description String?  @db.Text
+  shortcode   String   @unique
+  images      Json     // Array of image objects
+  department  String?
+  academicYear String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("galleries")
+}
+
+model Analytics {
+  id          String   @id @default(uuid())
+  pageViews   Int      @default(0)
+  uniqueVisitors Int   @default(0)
+  date        DateTime @default(now())
+  path        String?
+  userAgent   String?
+  ipAddress   String?
+  metadata    Json?    // Additional analytics data
+
+  @@map("analytics")
+}
+
+model NewsItem {
+  id          String    @id @default(uuid())
+  title       String
+  content     String    @db.Text
+  excerpt     String?   @db.Text
+  date        DateTime  @default(now())
+  category    String
+  priority    String    @default("medium") // low, medium, high
+  imageUrl    String?
+  linkUrl     String?
+  author      String?
+  status      String    @default("draft") // draft, published, archived
+  featured    Boolean   @default(false)
+  tags        String?   @db.Text // JSON string of tags array
+  publishDate DateTime?
+  expiryDate  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([date])
+  @@index([featured])
+  @@map("news_items")
+}
+
+model Slider {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  location    String   @default("homepage")
+  settings    Json?
+  slides      Json     // Array of slide objects
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("sliders")
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  type      SettingType @default(STRING)
+  description String?
+  isPublic  Boolean  @default(false) // Can be accessed on frontend
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
