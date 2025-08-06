@@ -400,4 +400,25 @@ export function setCurrentTenant(context: TenantContext): void {
   }
 }
 
+/**
+ * Get current tenant from NextRequest (for API routes)
+ */
+export async function getCurrentTenant(request: NextRequest): Promise<{ id: string; name: string } | null> {
+  const tenantId = TenantIdentificationService.identifyTenant(request);
+
+  if (!tenantId) {
+    return null;
+  }
+
+  const config = await TenantIdentificationService.getTenantConfig(tenantId);
+  if (!config) {
+    return null;
+  }
+
+  return {
+    id: tenantId,
+    name: config.name
+  };
+}
+
 export default TenantIdentificationService;
