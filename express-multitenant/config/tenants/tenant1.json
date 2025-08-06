@@ -1,0 +1,23 @@
+{
+  "tenantId": "tenant1",
+  "subdomain": "tenant1",
+  "database": {
+    "host": "localhost",
+    "port": 3306,
+    "database": "tenant1_db",
+    "user": "tenant1_user",
+    "password": "secure_password_123",
+    "connectionLimit": 10,
+    "ssl": false
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379
+  },
+  "features": ["analytics", "reporting", "api_access"],
+  "customSettings": {
+    "theme": "blue",
+    "maxUsers": 100,
+    "storageLimit": "5GB"
+  }
+}

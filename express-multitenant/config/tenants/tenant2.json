@@ -1,0 +1,20 @@
+{
+  "tenantId": "tenant2",
+  "subdomain": "tenant2",
+  "database": {
+    "host": "db2.example.com",
+    "port": 3306,
+    "database": "tenant2_production",
+    "user": "tenant2_admin",
+    "password": "another_secure_password_456",
+    "connectionLimit": 20,
+    "ssl": true
+  },
+  "features": ["premium", "analytics", "reporting", "api_access", "white_label"],
+  "customSettings": {
+    "theme": "dark",
+    "maxUsers": 500,
+    "storageLimit": "50GB",
+    "customDomain": "app.tenant2.com"
+  }
+}

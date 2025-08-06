@@ -1,0 +1,18 @@
+{
+  "tenantId": "admin",
+  "subdomain": "admin",
+  "database": {
+    "host": "localhost",
+    "port": 3306,
+    "database": "admin_system",
+    "user": "admin_user",
+    "password": "admin_super_secure_789",
+    "connectionLimit": 5,
+    "ssl": false
+  },
+  "features": ["admin", "tenant_management", "system_monitoring"],
+  "customSettings": {
+    "adminLevel": "super",
+    "accessLevel": "full"
+  }
+}
