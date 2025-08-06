@@ -1,0 +1,610 @@
+// Enhanced Multi-Tenant CMS Schema
+// This is the complete schema for the CMS system
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"  // Changed to PostgreSQL for better JSON support
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// CORE MODELS
+// ================================
+
+model Tenant {
+  id           String   @id @default(cuid())
+  name         String
+  subdomain    String   @unique
+  domain       String?  @unique
+  logo         String?
+  favicon      String?
+  primaryColor String   @default("#3b82f6")
+  settings     Json?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  users        User[]
+  pages        Page[]
+  posts        Post[]
+  files        File[]
+  menus        Menu[]
+  galleries    Gallery[]
+  analytics    Analytics[]
+  newsItems    NewsItem[]
+  events       Event[]
+  sliders      Slider[]
+  departments  Department[]
+  admissions   Admission[]
+  research     Research[]
+  grievances   Grievance[]
+  feedback     Feedback[]
+  quickLinks   QuickLink[]
+  naacData     NaacData[]
+  config       Config[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  firstName String
+  lastName  String
+  avatar    String?
+  role      Role      @default(EDITOR)
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdPages     Page[]      @relation("PageCreator")
+  updatedPages     Page[]      @relation("PageUpdater")
+  createdPosts     Post[]      @relation("PostCreator")
+  updatedPosts     Post[]      @relation("PostUpdater")
+  createdEvents    Event[]     @relation("EventCreator")
+  createdNews      NewsItem[]  @relation("NewsCreator")
+  createdGalleries Gallery[]   @relation("GalleryCreator")
+  createdSliders   Slider[]    @relation("SliderCreator")
+  submittedFeedback Feedback[] @relation("FeedbackSubmitter")
+
+  @@map("users")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  VIEWER
+  STUDENT
+  FACULTY
+  STAFF
+}
+
+// ================================
+// CONTENT MODELS
+// ================================
+
+model Page {
+  id              String    @id @default(cuid())
+  title           String
+  slug            String
+  content         Json?     // Puck.js content
+  html            String?   @db.Text // Raw HTML content
+  css             String?   @db.Text // Custom CSS
+  js              String?   @db.Text // Custom JavaScript
+  metaTitle       String?
+  metaDescription String?   @db.Text
+  isPublished     Boolean   @default(false)
+  publishedAt     DateTime?
+  template        String?   @default("default")
+  seoScore        Int?      @default(0)
+  viewCount       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdById String
+  createdBy   User   @relation("PageCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?  @relation("PageUpdater", fields: [updatedById], references: [id])
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, isPublished])
+  @@index([tenantId, createdAt])
+  @@map("pages")
+}
+
+model Post {
+  id              String    @id @default(cuid())
+  title           String
+  slug            String
+  excerpt         String?   @db.Text
+  content         Json?     // Rich text content
+  featuredImage   String?
+  metaTitle       String?
+  metaDescription String?   @db.Text
+  isPublished     Boolean   @default(false)
+  publishedAt     DateTime?
+  category        String?
+  tags            String[]  @default([])
+  viewCount       Int       @default(0)
+  readTime        Int?      // in minutes
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdById String
+  createdBy   User   @relation("PostCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?  @relation("PostUpdater", fields: [updatedById], references: [id])
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, isPublished])
+  @@index([tenantId, category])
+  @@map("posts")
+}
+
+model NewsItem {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    @db.Text
+  excerpt     String?   @db.Text
+  date        DateTime  @default(now())
+  category    String    @default("general")
+  priority    Priority  @default(MEDIUM)
+  imageUrl    String?
+  linkUrl     String?
+  author      String?
+  status      Status    @default(DRAFT)
+  featured    Boolean   @default(false)
+  tags        String[]  @default([])
+  publishDate DateTime?
+  expiryDate  DateTime?
+  viewCount   Int       @default(0)
+  likes       Int       @default(0)
+  shares      Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  authorId String?
+  authorUser User? @relation("NewsCreator", fields: [authorId], references: [id])
+
+  @@index([tenantId, category])
+  @@index([tenantId, status])
+  @@index([tenantId, date])
+  @@index([featured])
+  @@map("news_items")
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String    @db.Text
+  startDate   DateTime
+  endDate     DateTime?
+  location    String?
+  venue       String?
+  imageUrl    String?
+  category    String    @default("general")
+  department  String?
+  organizer   String?
+  status      Status    @default(DRAFT)
+  isRecurring Boolean   @default(false)
+  recurringPattern String? // JSON for recurring events
+  maxAttendees Int?
+  currentAttendees Int @default(0)
+  registrationRequired Boolean @default(false)
+  registrationDeadline DateTime?
+  featured    Boolean   @default(false)
+  tags        String[]  @default([])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdById String
+  createdBy   User   @relation("EventCreator", fields: [createdById], references: [id])
+
+  @@index([tenantId, startDate])
+  @@index([tenantId, category])
+  @@index([tenantId, status])
+  @@map("events")
+}
+
+// ================================
+// MEDIA & FILES
+// ================================
+
+model File {
+  id           String   @id @default(cuid())
+  name         String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  url          String
+  folder       String?
+  alt          String?
+  caption      String?
+  tags         String[] @default([])
+  isPublic     Boolean  @default(true)
+  downloadCount Int     @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, folder])
+  @@index([tenantId, mimeType])
+  @@map("files")
+}
+
+model Gallery {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?  @db.Text
+  shortcode    String   @unique
+  images       Json     // Array of image objects
+  department   String?
+  academicYear String?
+  category     String?  @default("general")
+  isActive     Boolean  @default(true)
+  isPublic     Boolean  @default(true)
+  viewCount    Int      @default(0)
+  likes        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdById String
+  createdBy   User   @relation("GalleryCreator", fields: [createdById], references: [id])
+
+  @@index([tenantId, category])
+  @@index([tenantId, isActive])
+  @@map("galleries")
+}
+
+model Slider {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  slides      Json     // Array of slide objects
+  location    String   @default("homepage") // homepage, header, custom
+  isActive    Boolean  @default(true)
+  autoPlay    Boolean  @default(true)
+  duration    Int      @default(5000) // milliseconds
+  transition  String   @default("slide") // slide, fade
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdById String
+  createdBy   User   @relation("SliderCreator", fields: [createdById], references: [id])
+
+  @@index([tenantId, location])
+  @@index([tenantId, isActive])
+  @@map("sliders")
+}
+
+// ================================
+// NAVIGATION & MENUS
+// ================================
+
+model Menu {
+  id        String   @id @default(cuid())
+  name      String
+  location  String   // header, footer, sidebar, mobile
+  items     Json     // Menu items as JSON tree
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, location])
+  @@index([tenantId, isActive])
+  @@map("menus")
+}
+
+model QuickLink {
+  id          String   @id @default(cuid())
+  title       String
+  url         String
+  description String?
+  icon        String?
+  category    String   @default("general")
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  openInNewTab Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, category])
+  @@index([tenantId, isActive])
+  @@map("quick_links")
+}
+
+// ================================
+// INSTITUTIONAL MODELS
+// ================================
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?  @db.Text
+  head        String?
+  email       String?
+  phone       String?
+  location    String?
+  established String?
+  website     String?
+  logo        String?
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
+  @@map("departments")
+}
+
+model Admission {
+  id              String    @id @default(cuid())
+  title           String
+  description     String    @db.Text
+  course          String
+  department      String?
+  eligibility     String    @db.Text
+  fees            String?
+  applicationStart DateTime?
+  applicationEnd  DateTime?
+  examDate        DateTime?
+  resultDate      DateTime?
+  documents       Json?     // Required documents list
+  process         Json?     // Admission process steps
+  status          Status    @default(DRAFT)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, course])
+  @@index([tenantId, isActive])
+  @@map("admissions")
+}
+
+model Research {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  researcher  String
+  department  String?
+  category    String   @default("research")
+  status      Status   @default(DRAFT)
+  startDate   DateTime?
+  endDate     DateTime?
+  funding     String?
+  publications Json?   // Related publications
+  documents   Json?    // Related documents/files
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, category])
+  @@index([tenantId, isActive])
+  @@map("research")
+}
+
+model Grievance {
+  id          String        @id @default(cuid())
+  title       String
+  description String        @db.Text
+  category    String        @default("general")
+  priority    Priority      @default(MEDIUM)
+  status      GrievanceStatus @default(SUBMITTED)
+  submitter   String        // Name of submitter
+  email       String
+  phone       String?
+  response    String?       @db.Text
+  assignedTo  String?
+  resolvedAt  DateTime?
+  attachments Json?         // File attachments
+  isAnonymous Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@map("grievances")
+}
+
+model Feedback {
+  id          String      @id @default(cuid())
+  name        String
+  email       String
+  subject     String
+  message     String      @db.Text
+  category    String      @default("general")
+  rating      Int?        // 1-5 rating
+  status      FeedbackStatus @default(UNREAD)
+  response    String?     @db.Text
+  isPublic    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  submitterId String?
+  submitter   User?   @relation("FeedbackSubmitter", fields: [submitterId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@map("feedback")
+}
+
+model NaacData {
+  id          String   @id @default(cuid())
+  criterion   String   // NAAC criteria number
+  title       String
+  description String   @db.Text
+  documents   Json?    // Related documents
+  evidence    Json?    // Evidence files
+  score       Float?
+  remarks     String?  @db.Text
+  academicYear String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, criterion])
+  @@index([tenantId, academicYear])
+  @@map("naac_data")
+}
+
+// ================================
+// SYSTEM MODELS
+// ================================
+
+model Config {
+  id        String   @id @default(cuid())
+  key       String
+  value     Json
+  category  String   @default("general")
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, category])
+  @@map("config")
+}
+
+model Analytics {
+  id             String   @id @default(cuid())
+  path           String
+  pageViews      Int      @default(1)
+  uniqueVisitors Int      @default(1)
+  userAgent      String?
+  ipAddress      String?
+  referer        String?
+  country        String?
+  city           String?
+  device         String?
+  browser        String?
+  os             String?
+  date           DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  // Multi-tenant
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, date])
+  @@index([tenantId, path])
+  @@map("analytics")
+}
+
+// ================================
+// ENUMS
+// ================================
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum Status {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  SCHEDULED
+}
+
+enum GrievanceStatus {
+  SUBMITTED
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
+enum FeedbackStatus {
+  UNREAD
+  READ
+  RESPONDED
+  ARCHIVED
+}

@@ -1,0 +1,22 @@
+{
+  "scripts": {
+    "tenant:create": "tsx scripts/tenant-setup.ts create",
+    "tenant:list": "tsx scripts/tenant-setup.ts list",
+    "tenant:delete": "tsx scripts/tenant-setup.ts delete",
+    "tenant:stats": "tsx scripts/tenant-setup.ts stats",
+    "tenant:migrate": "tsx scripts/tenant-setup.ts migrate",
+    "tenant:health": "tsx scripts/tenant-setup.ts health",
+    "tenant:setup-demo": "tsx scripts/tenant-setup.ts create demo 'Demo Company' demo@example.com shared",
+    "tenant:setup-enterprise": "tsx scripts/tenant-setup.ts create enterprise 'Enterprise Corp' admin@enterprise.com dedicated",
+    "db:migrate:shared": "prisma migrate deploy",
+    "db:migrate:tenant": "tsx scripts/tenant-setup.ts migrate",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "dev:multi-tenant": "npm run db:generate && npm run dev",
+    "build:multi-tenant": "npm run db:generate && npm run build"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

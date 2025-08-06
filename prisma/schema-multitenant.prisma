@@ -1,0 +1,167 @@
+// Multi-tenant Prisma schema for MySQL
+// Dedicated database strategy - no tenantId fields needed
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// For shared database strategy - all models include tenantId
+// For dedicated database strategy - remove tenantId fields
+
+model User {
+  id        String   @id @default(cuid()) @db.VarChar(191)
+  email     String   @unique @db.VarChar(191)
+  name      String   @db.VarChar(255)
+  password  String?  @db.VarChar(255) // Hashed password
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true) @map("is_active")
+  lastLogin DateTime? @map("last_login")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  pages     Page[]
+  files     File[]
+
+  @@map("users")
+}
+
+model Page {
+  id           String      @id @default(cuid()) @db.VarChar(191)
+  title        String      @db.VarChar(255)
+  slug         String      @unique @db.VarChar(255)
+  data         Json?       // Page builder data (Puck, GrapesJS, etc.)
+  html         String?     @db.LongText // Rendered HTML
+  css          String?     @db.LongText // Custom CSS
+  js           String?     @db.LongText // Custom JavaScript
+  builderType  BuilderType @map("builder_type")
+  isPublished  Boolean     @default(false) @map("is_published")
+  publishedAt  DateTime?   @map("published_at")
+  metaTitle    String?     @map("meta_title") @db.VarChar(255)
+  metaDescription String?  @map("meta_description") @db.Text
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  authorId     String      @map("author_id") @db.VarChar(191)
+  author       User        @relation(fields: [authorId], references: [id])
+  files        File[]
+
+  @@index([isPublished])
+  @@index([authorId])
+  @@map("pages")
+}
+
+model File {
+  id          String    @id @default(cuid()) @db.VarChar(191)
+  filename    String    @db.VarChar(255)
+  originalName String   @map("original_name") @db.VarChar(255)
+  mimeType    String    @map("mime_type") @db.VarChar(127)
+  size        Int       // Size in bytes
+  url         String    @db.VarChar(500) // Storage URL
+  alt         String?   @db.VarChar(255) // Alt text for images
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  uploadedById String   @map("uploaded_by_id") @db.VarChar(191)
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  pages        Page[]
+
+  @@index([mimeType])
+  @@index([uploadedById])
+  @@map("files")
+}
+
+model Menu {
+  id        String     @id @default(cuid()) @db.VarChar(191)
+  name      String     @db.VarChar(255)
+  slug      String     @unique @db.VarChar(255)
+  items     Json       // Menu structure as JSON
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("menus")
+}
+
+model Setting {
+  id        String   @id @default(cuid()) @db.VarChar(191)
+  key       String   @unique @db.VarChar(255)
+  value     String   @db.Text
+  type      SettingType @default(STRING)
+  isPublic  Boolean  @default(false) @map("is_public") // Can be accessed on frontend
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+// System-level models (for system database, not tenant databases)
+model Tenant {
+  id              String   @id @default(cuid()) @db.VarChar(191)
+  name            String   @db.VarChar(255)
+  subdomain       String   @unique @db.VarChar(191)
+  status          TenantStatus @default(ACTIVE)
+  databaseStrategy DatabaseStrategy @map("database_strategy")
+  connectionString String? @map("connection_string") @db.VarChar(500) // For dedicated DB strategy
+  config          Json     // Tenant configuration
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("tenants")
+}
+
+model TenantUsage {
+  id            String   @id @default(cuid()) @db.VarChar(191)
+  tenantId      String   @map("tenant_id") @db.VarChar(191)
+  month         String   @db.VarChar(7) // YYYY-MM format
+  userCount     Int      @default(0) @map("user_count")
+  pageCount     Int      @default(0) @map("page_count")
+  storageUsed   Int      @default(0) @map("storage_used") // in bytes
+  apiCalls      Int      @default(0) @map("api_calls")
+  bandwidthUsed Int      @default(0) @map("bandwidth_used") // in bytes
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, month])
+  @@map("tenant_usage")
+}
+
+// Enums
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  USER
+}
+
+enum BuilderType {
+  PUCK
+  GRAPESJS
+  HTML
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+  ARCHIVED
+}
+
+enum DatabaseStrategy {
+  SHARED
+  DEDICATED
+}

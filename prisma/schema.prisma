@@ -1,0 +1,226 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  subdomain   String   @unique
+  domain      String?  @unique
+  logo        String?
+  favicon     String?
+  primaryColor String  @default("#3b82f6")
+  settings    Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users       User[]
+  pages       Page[]
+  posts       Post[]
+  files       File[]
+  menus       Menu[]
+  galleries   Gallery[]
+  analytics   Analytics[]
+  newsItems   NewsItem[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  avatar    String?
+  role      Role     @default(EDITOR)
+  isActive  Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdPages Page[] @relation("PageCreator")
+  updatedPages Page[] @relation("PageUpdater")
+  createdPosts Post[] @relation("PostCreator")
+  updatedPosts Post[] @relation("PostUpdater")
+
+  @@map("users")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model Page {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String
+  content     Json?     // Page builder content
+  metaTitle   String?
+  metaDescription String? @db.Text
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  template    String?   @default("default")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdById String
+  createdBy   User      @relation("PageCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?     @relation("PageUpdater", fields: [updatedById], references: [id])
+
+  @@unique([tenantId, slug])
+  @@map("pages")
+}
+
+model Post {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String
+  excerpt     String?   @db.Text
+  content     Json?     // Rich text content
+  featuredImage String?
+  metaTitle   String?
+  metaDescription String? @db.Text
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  createdById String
+  createdBy   User      @relation("PostCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?     @relation("PostUpdater", fields: [updatedById], references: [id])
+
+  @@unique([tenantId, slug])
+  @@map("posts")
+}
+
+model File {
+  id          String   @id @default(uuid())
+  name        String
+  originalName String
+  mimeType    String
+  size        Int
+  path        String
+  url         String
+  folder      String?
+  alt         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("files")
+}
+
+model Menu {
+  id        String     @id @default(uuid())
+  name      String
+  location  String     // header, footer, sidebar
+  items     Json       // Menu items as JSON
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Multi-tenant
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("menus")
+}
+
+model Gallery {
+  id          String   @id @default(uuid())
+  title       String
+  description String?  @db.Text
+  shortcode   String   @unique
+  images      Json     // Array of image objects
+  department  String?
+  academicYear String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-tenant
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("galleries")
+}
+
+model Analytics {
+  id          String   @id @default(uuid())
+  pageViews   Int      @default(0)
+  uniqueVisitors Int   @default(0)
+  date        DateTime @default(now())
+  path        String?
+  userAgent   String?
+  ipAddress   String?
+
+  // Multi-tenant
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("analytics")
+}
+
+model NewsItem {
+  id          String    @id @default(uuid())
+  title       String
+  content     String    @db.Text
+  excerpt     String?   @db.Text
+  date        DateTime  @default(now())
+  category    String
+  priority    String    @default("medium") // low, medium, high
+  imageUrl    String?
+  linkUrl     String?
+  author      String?
+  status      String    @default("draft") // draft, published, archived
+  featured    Boolean   @default(false)
+  tags        String?   @db.Text // JSON string of tags array
+  publishDate DateTime?
+  expiryDate  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Multi-tenant
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, category])
+  @@index([tenantId, status])
+  @@index([tenantId, date])
+  @@index([featured])
+  @@map("news_items")
+}
